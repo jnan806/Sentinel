@@ -15,19 +15,11 @@
  */
 package com.alibaba.csp.sentinel.datasource.consul;
 
-import com.alibaba.csp.sentinel.concurrent.NamedThreadFactory;
-import com.alibaba.csp.sentinel.datasource.AbstractDataSource;
-import com.alibaba.csp.sentinel.datasource.Converter;
-import com.alibaba.csp.sentinel.log.RecordLog;
+import com.alibaba.csp.sentinel.datasource.DataSourceHolder;
+import com.alibaba.csp.sentinel.datasource.DataSourceMode;
+import com.alibaba.csp.sentinel.datasource.converter.SentinelConverter;
 import com.alibaba.csp.sentinel.util.AssertUtil;
-
-import com.alibaba.csp.sentinel.util.StringUtil;
 import com.ecwid.consul.v1.ConsulClient;
-import com.ecwid.consul.v1.QueryParams;
-import com.ecwid.consul.v1.Response;
-import com.ecwid.consul.v1.kv.model.GetValue;
-
-import java.util.concurrent.*;
 
 /**
  * <p>
@@ -46,180 +38,75 @@ import java.util.concurrent.*;
  * @author wavesZh
  * @author Zhiguo.Chen
  */
-public class ConsulDataSource<T> extends AbstractDataSource<String, T> {
+public class ConsulDataSource<T> extends DataSourceHolder {
+
+    private ConsulReadableDataSource<T> readableDataSource;
+    private ConsulWritableDataSource<T> writableDataSource;
 
     private static final int DEFAULT_PORT = 8500;
 
-    private final String address;
-    private final String token;
-    private final String ruleKey;
-    /**
-     * Request of query will hang until timeout (in second) or get updated value.
-     */
-    private final int watchTimeout;
+    public ConsulDataSource(String host, String ruleKey, int watchTimeoutInSecond, SentinelConverter<String, T> converter) {
+        this(host, DEFAULT_PORT, ruleKey, watchTimeoutInSecond, converter);
+    }
 
-    /**
-     * Record the data's index in Consul to watch the change.
-     * If lastIndex is smaller than the index of next query, it means that rule data has updated.
-     */
-    private volatile long lastIndex;
+    public ConsulDataSource(String host, String ruleKey, int watchTimeoutInSecond, SentinelConverter<String, T> converter, DataSourceMode dataSourceMode) {
+        this(host, DEFAULT_PORT, ruleKey, watchTimeoutInSecond, converter, DataSourceMode.READABLE);
+    }
 
-    private final ConsulClient client;
-
-    private final ConsulKVWatcher watcher = new ConsulKVWatcher();
-
-    @SuppressWarnings("PMD.ThreadPoolCreationRule")
-    private final ExecutorService watcherService = Executors.newSingleThreadExecutor(
-        new NamedThreadFactory("sentinel-consul-ds-watcher", true));
-
-    public ConsulDataSource(String host, String ruleKey, int watchTimeoutInSecond, Converter<String, T> parser) {
-        this(host, DEFAULT_PORT, ruleKey, watchTimeoutInSecond, parser);
+    public ConsulDataSource(String host, int port, String ruleKey, int watchTimeout, SentinelConverter<String, T> converter) {
+        this(host, port, null, ruleKey, watchTimeout, converter, DataSourceMode.READABLE);
+    }
+    public ConsulDataSource(String host, int port, String ruleKey, int watchTimeout, SentinelConverter<String, T> converter, DataSourceMode dataSourceMode) {
+        this(host, port, null, ruleKey, watchTimeout, converter, dataSourceMode);
     }
 
     /**
      * Constructor of {@code ConsulDataSource}.
      *
-     * @param parser       customized data parser, cannot be empty
      * @param host         consul agent host
      * @param port         consul agent port
+     * @param token        consul agent acl token
      * @param ruleKey      data key in Consul
      * @param watchTimeout request for querying data will be blocked until new data or timeout. The unit is second (s)
+     * @param converter    customized data parser, cannot be empty
+     * @param dataSourceMode
      */
-    public ConsulDataSource(String host, int port, String ruleKey, int watchTimeout, Converter<String, T> parser) {
-        this(host, port, null, ruleKey, watchTimeout, parser);
-    }
-
-    /**
-     * Constructor of {@code ConsulDataSource}.
-     *
-     * @param parser       customized data parser, cannot be empty
-     * @param host         consul agent host
-     * @param port         consul agent port
-     * @param token     consul agent acl token
-     * @param ruleKey      data key in Consul
-     * @param watchTimeout request for querying data will be blocked until new data or timeout. The unit is second (s)
-     */
-    public ConsulDataSource(String host, int port, String token, String ruleKey, int watchTimeout, Converter<String, T> parser) {
-        super(parser);
+    public ConsulDataSource(String host, int port, String token, String ruleKey, int watchTimeout, SentinelConverter<String, T> converter, DataSourceMode dataSourceMode) {
+        super(converter, dataSourceMode);
         AssertUtil.notNull(host, "Consul host can not be null");
         AssertUtil.notEmpty(ruleKey, "Consul ruleKey can not be empty");
         AssertUtil.isTrue(watchTimeout >= 0, "watchTimeout should not be negative");
-        this.client = new ConsulClient(host, port);
-        this.address = host + ":" + port;
-        this.token = token;
-        this.ruleKey = ruleKey;
-        this.watchTimeout = watchTimeout;
-        loadInitialConfig();
-        startKVWatcher();
-    }
 
-    private void startKVWatcher() {
-        watcherService.submit(watcher);
-    }
+        super.setDataSourceClient( new ConsulClient(host, port));
 
-    private void loadInitialConfig() {
-        try {
-            T newValue = loadConfig();
-            if (newValue == null) {
-                RecordLog.warn(
-                    "[ConsulDataSource] WARN: initial config is null, you may have to check your data source");
-            }
-            getProperty().updateValue(newValue);
-        } catch (Exception ex) {
-            RecordLog.warn("[ConsulDataSource] Error when loading initial config", ex);
+        String address = host + ":" + port;
+
+        if(DataSourceMode.ALL == dataSourceMode || DataSourceMode.READABLE == dataSourceMode) {
+            this.readableDataSource = new ConsulReadableDataSource(address, token, ruleKey, this);
         }
+
+        if(DataSourceMode.ALL == dataSourceMode || DataSourceMode.WRITABLE == dataSourceMode) {
+            this.writableDataSource = new ConsulWritableDataSource<>(ruleKey,this);
+        }
+
     }
 
-    @Override
-    public String readSource() throws Exception {
-        if (this.client == null) {
-            throw new IllegalStateException("Consul has not been initialized or error occurred");
-        }
-        Response<GetValue> response = getValueImmediately(ruleKey);
-        if (response != null) {
-            GetValue value = response.getValue();
-            lastIndex = response.getConsulIndex();
-            return value != null ? value.getDecodedValue() : null;
-        }
-        return null;
+    public ConsulReadableDataSource<T> getReader() {
+        return this.readableDataSource;
     }
 
-    @Override
+    public ConsulWritableDataSource<T> getWriter() {
+        return this.writableDataSource;
+    }
+
     public void close() throws Exception {
-        watcher.stop();
-        watcherService.shutdown();
-    }
-
-    private class ConsulKVWatcher implements Runnable {
-        private volatile boolean running = true;
-
-        @Override
-        public void run() {
-            while (running) {
-                // It will be blocked until watchTimeout(s) if rule data has no update.
-                Response<GetValue> response = getValue(ruleKey, lastIndex, watchTimeout);
-                if (response == null) {
-                    try {
-                        TimeUnit.MILLISECONDS.sleep(watchTimeout * 1000);
-                    } catch (InterruptedException e) {
-                    }
-                    continue;
-                }
-                GetValue getValue = response.getValue();
-                Long currentIndex = response.getConsulIndex();
-                if (currentIndex == null || currentIndex <= lastIndex) {
-                    continue;
-                }
-                lastIndex = currentIndex;
-                if (getValue != null) {
-                    String newValue = getValue.getDecodedValue();
-                    try {
-                        getProperty().updateValue(parser.convert(newValue));
-                        RecordLog.info("[ConsulDataSource] New property value received for ({}, {}): {}",
-                            address, ruleKey, newValue);
-                    } catch (Exception ex) {
-                        // In case of parsing error.
-                        RecordLog.warn("[ConsulDataSource] Failed to update value for ({}, {}), raw value: {}",
-                            address, ruleKey, newValue);
-                    }
-                }
-            }
+        if(DataSourceMode.ALL == dataSourceMode || DataSourceMode.READABLE == dataSourceMode) {
+            this.readableDataSource.close();
         }
 
-        private void stop() {
-            running = false;
+        if(DataSourceMode.ALL == dataSourceMode || DataSourceMode.WRITABLE == dataSourceMode) {
+            this.writableDataSource.close();
         }
-    }
-
-    /**
-     * Get data from Consul immediately.
-     *
-     * @param key data key in Consul
-     * @return the value associated to the key, or null if error occurs
-     */
-    private Response<GetValue> getValueImmediately(String key) {
-        return getValue(key, -1, -1);
-    }
-
-    /**
-     * Get data from Consul (blocking).
-     *
-     * @param key      data key in Consul
-     * @param index    the index of data in Consul.
-     * @param waitTime time(second) for waiting get updated value.
-     * @return the value associated to the key, or null if error occurs
-     */
-    private Response<GetValue> getValue(String key, long index, long waitTime) {
-        try {
-            if (StringUtil.isNotBlank(token)) {
-                return client.getKVValue(key, token, new QueryParams(waitTime, index));
-            } else {
-                return client.getKVValue(key, new QueryParams(waitTime, index));
-            }
-        } catch (Throwable t) {
-            RecordLog.warn("[ConsulDataSource] Failed to get value for key: " + key, t);
-        }
-        return null;
     }
 
 }

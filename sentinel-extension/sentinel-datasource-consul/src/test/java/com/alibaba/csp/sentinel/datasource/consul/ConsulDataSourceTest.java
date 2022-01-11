@@ -17,6 +17,8 @@ package com.alibaba.csp.sentinel.datasource.consul;
 
 import com.alibaba.csp.sentinel.datasource.Converter;
 import com.alibaba.csp.sentinel.datasource.ReadableDataSource;
+import com.alibaba.csp.sentinel.datasource.converter.JsonArrayConverter;
+import com.alibaba.csp.sentinel.datasource.converter.SentinelConverter;
 import com.alibaba.csp.sentinel.slots.block.flow.FlowRule;
 import com.alibaba.csp.sentinel.slots.block.flow.FlowRuleManager;
 import com.alibaba.fastjson.JSON;
@@ -47,7 +49,7 @@ public class ConsulDataSourceTest {
     private ConsulProcess consul;
     private ConsulClient client;
 
-    private ReadableDataSource<String, List<FlowRule>> consulDataSource;
+    private ConsulDataSource<List<FlowRule>> consulDataSource;
 
     private List<FlowRule> rules;
 
@@ -59,16 +61,16 @@ public class ConsulDataSourceTest {
         int port = consul.getHttpPort();
         String host = "127.0.0.1";
         client = new ConsulClient(host, port);
-        Converter<String, List<FlowRule>> flowConfigParser = buildFlowConfigParser();
+        SentinelConverter<String, List<FlowRule>> flowConfigParser = buildFlowConfigParser();
         String flowRulesJson =
             "[{\"resource\":\"test\", \"limitApp\":\"default\", \"grade\":1, \"count\":\"0.0\", \"strategy\":0, "
                 + "\"refResource\":null, "
                 +
                 "\"controlBehavior\":0, \"warmUpPeriodSec\":10, \"maxQueueingTimeMs\":500, \"controller\":null}]";
         initConsulRuleData(flowRulesJson);
-        rules = flowConfigParser.convert(flowRulesJson);
+        rules = flowConfigParser.toSentinel(flowRulesJson);
         consulDataSource = new ConsulDataSource<>(host, port, ruleKey, waitTimeoutInSecond, flowConfigParser);
-        FlowRuleManager.register2Property(consulDataSource.getProperty());
+        FlowRuleManager.register2Property(consulDataSource.getReader().getProperty());
     }
 
     @After
@@ -97,8 +99,8 @@ public class ConsulDataSourceTest {
         Assert.assertEquals(this.rules, rules);
     }
 
-    private Converter<String, List<FlowRule>> buildFlowConfigParser() {
-        return source -> JSON.parseObject(source, new TypeReference<List<FlowRule>>() {});
+    private SentinelConverter<String, List<FlowRule>> buildFlowConfigParser() {
+        return new JsonArrayConverter<>(FlowRule.class);
     }
 
     private void initConsulRuleData(String flowRulesJson) {
