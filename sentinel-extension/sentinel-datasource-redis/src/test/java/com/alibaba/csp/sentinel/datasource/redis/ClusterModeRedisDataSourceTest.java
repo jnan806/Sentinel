@@ -18,6 +18,8 @@ package com.alibaba.csp.sentinel.datasource.redis;
 
 import com.alibaba.csp.sentinel.datasource.Converter;
 import com.alibaba.csp.sentinel.datasource.ReadableDataSource;
+import com.alibaba.csp.sentinel.datasource.converter.JsonArrayConverter;
+import com.alibaba.csp.sentinel.datasource.converter.SentinelConverter;
 import com.alibaba.csp.sentinel.datasource.redis.config.RedisConnectionConfig;
 import com.alibaba.csp.sentinel.slots.block.flow.FlowRule;
 import com.alibaba.csp.sentinel.slots.block.flow.FlowRuleManager;
@@ -56,13 +58,13 @@ public class ClusterModeRedisDataSourceTest {
 
     @Before
     public void initData() {
-        Converter<String, List<FlowRule>> flowConfigParser = buildFlowConfigParser();
+        SentinelConverter<String, List<FlowRule>> flowConfigParser = buildFlowConfigParser();
         RedisConnectionConfig config = RedisConnectionConfig.builder()
             .withRedisCluster(host, redisSentinelPort).build();
         initRedisRuleData();
-        ReadableDataSource<String, List<FlowRule>> redisDataSource = new RedisDataSource<>(config,
+        RedisDataSource<List<FlowRule>> redisDataSource = new RedisDataSource<>(config,
             ruleKey, channel, flowConfigParser);
-        FlowRuleManager.register2Property(redisDataSource.getProperty());
+        FlowRuleManager.register2Property(redisDataSource.getReader().getProperty());
     }
 
     @Test
@@ -94,7 +96,7 @@ public class ClusterModeRedisDataSourceTest {
         List<FlowRule> rules = FlowRuleManager.getRules();
         Assert.assertEquals(rules.get(0).getMaxQueueingTimeMs(), maxQueueingTimeMs);
         String value = subCommands.get(ruleKey);
-        List<FlowRule> flowRulesValuesInRedis = buildFlowConfigParser().convert(value);
+        List<FlowRule> flowRulesValuesInRedis = buildFlowConfigParser().toSentinel(value);
         Assert.assertEquals(flowRulesValuesInRedis.size(), 1);
         Assert.assertEquals(flowRulesValuesInRedis.get(0).getMaxQueueingTimeMs(), maxQueueingTimeMs);
     }
@@ -106,9 +108,8 @@ public class ClusterModeRedisDataSourceTest {
         client.shutdown();
     }
 
-    private Converter<String, List<FlowRule>> buildFlowConfigParser() {
-        return source -> JSON.parseObject(source, new TypeReference<List<FlowRule>>() {
-        });
+    private SentinelConverter<String, List<FlowRule>> buildFlowConfigParser() {
+        return new JsonArrayConverter<>(FlowRule.class);
     }
 
     private void initRedisRuleData() {

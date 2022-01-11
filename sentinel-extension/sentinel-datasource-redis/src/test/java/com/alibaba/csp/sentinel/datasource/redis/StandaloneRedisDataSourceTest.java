@@ -20,6 +20,8 @@ import ai.grakn.redismock.RedisServer;
 
 import com.alibaba.csp.sentinel.datasource.Converter;
 import com.alibaba.csp.sentinel.datasource.ReadableDataSource;
+import com.alibaba.csp.sentinel.datasource.converter.JsonArrayConverter;
+import com.alibaba.csp.sentinel.datasource.converter.SentinelConverter;
 import com.alibaba.csp.sentinel.datasource.redis.config.RedisConnectionConfig;
 import com.alibaba.csp.sentinel.slots.block.flow.FlowRule;
 import com.alibaba.csp.sentinel.slots.block.flow.FlowRuleManager;
@@ -68,16 +70,16 @@ public class StandaloneRedisDataSourceTest {
         } catch (IOException e) {
             e.printStackTrace();
         }
-        Converter<String, List<FlowRule>> flowConfigParser = buildFlowConfigParser();
+        SentinelConverter<String, List<FlowRule>> flowConfigParser = buildFlowConfigParser();
         client = RedisClient.create(RedisURI.create(server.getHost(), server.getBindPort()));
         RedisConnectionConfig config = RedisConnectionConfig.builder()
             .withHost(server.getHost())
             .withPort(server.getBindPort())
             .build();
         initRedisRuleData();
-        ReadableDataSource<String, List<FlowRule>> redisDataSource = new RedisDataSource<List<FlowRule>>(config,
+        RedisDataSource<List<FlowRule>> redisDataSource = new RedisDataSource<List<FlowRule>>(config,
             ruleKey, channel, flowConfigParser);
-        FlowRuleManager.register2Property(redisDataSource.getProperty());
+        FlowRuleManager.register2Property(redisDataSource.getReader().getProperty());
     }
 
     @Test
@@ -109,7 +111,7 @@ public class StandaloneRedisDataSourceTest {
         rules = FlowRuleManager.getRules();
         Assert.assertEquals(rules.get(0).getMaxQueueingTimeMs(), maxQueueingTimeMs);
         String value = subCommands.get(ruleKey);
-        List<FlowRule> flowRulesValuesInRedis = buildFlowConfigParser().convert(value);
+        List<FlowRule> flowRulesValuesInRedis = buildFlowConfigParser().toSentinel(value);
         Assert.assertEquals(flowRulesValuesInRedis.size(), 1);
         Assert.assertEquals(flowRulesValuesInRedis.get(0).getMaxQueueingTimeMs(), maxQueueingTimeMs);
     }
@@ -118,7 +120,7 @@ public class StandaloneRedisDataSourceTest {
     public void testInitAndParseFlowRuleSuccess() {
         RedisCommands<String, String> stringRedisCommands = client.connect().sync();
         String value = stringRedisCommands.get(ruleKey);
-        List<FlowRule> flowRules = buildFlowConfigParser().convert(value);
+        List<FlowRule> flowRules = buildFlowConfigParser().toSentinel(value);
         Assert.assertEquals(flowRules.size(), 1);
         stringRedisCommands.del(ruleKey);
     }
@@ -140,8 +142,8 @@ public class StandaloneRedisDataSourceTest {
         server = null;
     }
 
-    private Converter<String, List<FlowRule>> buildFlowConfigParser() {
-        return source -> JSON.parseObject(source, new TypeReference<List<FlowRule>>() {});
+    private SentinelConverter<String, List<FlowRule>> buildFlowConfigParser() {
+        return new JsonArrayConverter<>(FlowRule.class);
     }
 
     private void initRedisRuleData() {

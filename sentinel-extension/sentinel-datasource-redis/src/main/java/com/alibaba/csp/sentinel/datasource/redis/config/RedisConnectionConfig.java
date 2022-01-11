@@ -19,7 +19,9 @@ package com.alibaba.csp.sentinel.datasource.redis.config;
 import com.alibaba.csp.sentinel.util.AssertUtil;
 import com.alibaba.csp.sentinel.util.StringUtil;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * This class provide a builder to build redis client connection config.
@@ -83,12 +85,12 @@ public class RedisConnectionConfig {
     }
 
     /**
-     * Returns a new {@link RedisConnectionConfig.Builder} to construct a {@link RedisConnectionConfig}.
+     * Returns a new {@link Builder} to construct a {@link RedisConnectionConfig}.
      *
-     * @return a new {@link RedisConnectionConfig.Builder} to construct a {@link RedisConnectionConfig}.
+     * @return a new {@link Builder} to construct a {@link RedisConnectionConfig}.
      */
-    public static RedisConnectionConfig.Builder builder() {
-        return new RedisConnectionConfig.Builder();
+    public static Builder builder() {
+        return new Builder();
     }
 
     /**
@@ -342,7 +344,7 @@ public class RedisConnectionConfig {
          * @param host the host name
          * @return New builder with Redis host/port.
          */
-        public static RedisConnectionConfig.Builder redis(String host) {
+        public static Builder redis(String host) {
             return redis(host, DEFAULT_REDIS_PORT);
         }
 
@@ -353,7 +355,7 @@ public class RedisConnectionConfig {
          * @param port the port
          * @return New builder with Redis host/port.
          */
-        public static RedisConnectionConfig.Builder redis(String host, int port) {
+        public static Builder redis(String host, int port) {
 
             AssertUtil.notEmpty(host, "Host must not be empty");
             AssertUtil.isTrue(isValidPort(port), String.format("Port out of range: %s", port));
@@ -368,11 +370,11 @@ public class RedisConnectionConfig {
          * @param host the host name
          * @return New builder with Sentinel host/port.
          */
-        public static RedisConnectionConfig.Builder redisSentinel(String host) {
+        public static Builder redisSentinel(String host) {
 
             AssertUtil.notEmpty(host, "Host must not be empty");
 
-            RedisConnectionConfig.Builder builder = RedisConnectionConfig.builder();
+            Builder builder = RedisConnectionConfig.builder();
             return builder.withRedisSentinel(host);
         }
 
@@ -383,12 +385,12 @@ public class RedisConnectionConfig {
          * @param port the port
          * @return New builder with Sentinel host/port.
          */
-        public static RedisConnectionConfig.Builder redisSentinel(String host, int port) {
+        public static Builder redisSentinel(String host, int port) {
 
             AssertUtil.notEmpty(host, "Host must not be empty");
             AssertUtil.isTrue(isValidPort(port), String.format("Port out of range: %s", port));
 
-            RedisConnectionConfig.Builder builder = RedisConnectionConfig.builder();
+            Builder builder = RedisConnectionConfig.builder();
             return builder.withRedisSentinel(host, port);
         }
 
@@ -399,7 +401,7 @@ public class RedisConnectionConfig {
          * @param masterId redisSentinel master id
          * @return New builder with Sentinel host/port.
          */
-        public static RedisConnectionConfig.Builder redisSentinel(String host, String masterId) {
+        public static Builder redisSentinel(String host, String masterId) {
             return redisSentinel(host, DEFAULT_SENTINEL_PORT, masterId);
         }
 
@@ -411,12 +413,12 @@ public class RedisConnectionConfig {
          * @param masterId redisSentinel master id
          * @return New builder with Sentinel host/port.
          */
-        public static RedisConnectionConfig.Builder redisSentinel(String host, int port, String masterId) {
+        public static Builder redisSentinel(String host, int port, String masterId) {
 
             AssertUtil.notEmpty(host, "Host must not be empty");
             AssertUtil.isTrue(isValidPort(port), String.format("Port out of range: %s", port));
 
-            RedisConnectionConfig.Builder builder = RedisConnectionConfig.builder();
+            Builder builder = RedisConnectionConfig.builder();
             return builder.withSentinelMasterId(masterId).withRedisSentinel(host, port);
         }
 
@@ -426,7 +428,7 @@ public class RedisConnectionConfig {
          * @param host the host name
          * @return the builder
          */
-        public RedisConnectionConfig.Builder withRedisSentinel(String host) {
+        public Builder withRedisSentinel(String host) {
             return withRedisSentinel(host, DEFAULT_SENTINEL_PORT);
         }
 
@@ -437,7 +439,7 @@ public class RedisConnectionConfig {
          * @param port the port
          * @return the builder
          */
-        public RedisConnectionConfig.Builder withRedisSentinel(String host, int port) {
+        public Builder withRedisSentinel(String host, int port) {
 
             AssertUtil.assertState(this.host == null, "Cannot use with Redis mode.");
             AssertUtil.notEmpty(host, "Host must not be empty");
@@ -453,11 +455,11 @@ public class RedisConnectionConfig {
          * @param host the host name
          * @return New builder with Cluster host/port.
          */
-        public static RedisConnectionConfig.Builder redisCluster(String host) {
+        public static Builder redisCluster(String host) {
 
             AssertUtil.notEmpty(host, "Host must not be empty");
 
-            RedisConnectionConfig.Builder builder = RedisConnectionConfig.builder();
+            Builder builder = RedisConnectionConfig.builder();
             return builder.withRedisCluster(host);
         }
 
@@ -468,12 +470,12 @@ public class RedisConnectionConfig {
          * @param port the port
          * @return New builder with Cluster host/port.
          */
-        public static RedisConnectionConfig.Builder redisCluster(String host, int port) {
+        public static Builder redisCluster(String host, int port) {
 
             AssertUtil.notEmpty(host, "Host must not be empty");
             AssertUtil.isTrue(isValidPort(port), String.format("Port out of range: %s", port));
 
-            RedisConnectionConfig.Builder builder = RedisConnectionConfig.builder();
+            Builder builder = RedisConnectionConfig.builder();
             return builder.withRedisCluster(host, port);
         }
 
@@ -483,7 +485,7 @@ public class RedisConnectionConfig {
          * @param host the host name
          * @return the builder
          */
-        public RedisConnectionConfig.Builder withRedisCluster(String host) {
+        public Builder withRedisCluster(String host) {
             return withRedisCluster(host, DEFAULT_CLUSTER_PORT);
         }
 
@@ -494,7 +496,7 @@ public class RedisConnectionConfig {
          * @param port the port
          * @return the builder
          */
-        public RedisConnectionConfig.Builder withRedisCluster(String host, int port) {
+        public Builder withRedisCluster(String host, int port) {
 
             AssertUtil.assertState(this.host == null, "Cannot use with Redis mode.");
             AssertUtil.notEmpty(host, "Host must not be empty");
@@ -510,7 +512,7 @@ public class RedisConnectionConfig {
          * @param host the port
          * @return the builder
          */
-        public RedisConnectionConfig.Builder withHost(String host) {
+        public Builder withHost(String host) {
 
             AssertUtil.assertState(this.redisSentinels.isEmpty(),
                 "Sentinels are non-empty. Cannot use in Sentinel mode.");
@@ -526,7 +528,7 @@ public class RedisConnectionConfig {
          * @param port the port
          * @return the builder
          */
-        public RedisConnectionConfig.Builder withPort(int port) {
+        public Builder withPort(int port) {
 
             AssertUtil.assertState(this.host != null, "Host is null. Cannot use in Sentinel mode.");
             AssertUtil.isTrue(isValidPort(port), String.format("Port out of range: %s", port));
@@ -541,7 +543,7 @@ public class RedisConnectionConfig {
          * @param database the database number
          * @return the builder
          */
-        public RedisConnectionConfig.Builder withDatabase(int database) {
+        public Builder withDatabase(int database) {
 
             AssertUtil.isTrue(database >= 0, "Invalid database number: " + database);
 
@@ -555,7 +557,7 @@ public class RedisConnectionConfig {
          * @param clientName the client name
          * @return the builder
          */
-        public RedisConnectionConfig.Builder withClientName(String clientName) {
+        public Builder withClientName(String clientName) {
 
             AssertUtil.notNull(clientName, "Client name must not be null");
 
@@ -569,7 +571,7 @@ public class RedisConnectionConfig {
          * @param password the password
          * @return the builder
          */
-        public RedisConnectionConfig.Builder withPassword(String password) {
+        public Builder withPassword(String password) {
 
             AssertUtil.notNull(password, "Password must not be null");
 
@@ -582,7 +584,7 @@ public class RedisConnectionConfig {
          * @param password the password
          * @return the builder
          */
-        public RedisConnectionConfig.Builder withPassword(char[] password) {
+        public Builder withPassword(char[] password) {
 
             AssertUtil.notNull(password, "Password must not be null");
 
@@ -596,7 +598,7 @@ public class RedisConnectionConfig {
          * @param timeout must not be {@literal null} or negative.
          * @return the builder
          */
-        public RedisConnectionConfig.Builder withTimeout(long timeout) {
+        public Builder withTimeout(long timeout) {
 
             AssertUtil.notNull(timeout, "Timeout must not be null");
             AssertUtil.notNull(timeout >= 0, "Timeout must be greater or equal 0");
@@ -611,7 +613,7 @@ public class RedisConnectionConfig {
          * @param sentinelMasterId redisSentinel master id, must not be empty or {@literal null}
          * @return the builder
          */
-        public RedisConnectionConfig.Builder withSentinelMasterId(String sentinelMasterId) {
+        public Builder withSentinelMasterId(String sentinelMasterId) {
 
             AssertUtil.notEmpty(sentinelMasterId, "Sentinel master id must not empty");
 
