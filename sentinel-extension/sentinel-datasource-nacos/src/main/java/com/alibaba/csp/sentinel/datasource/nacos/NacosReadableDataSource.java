@@ -17,12 +17,11 @@ package com.alibaba.csp.sentinel.datasource.nacos;
 
 import com.alibaba.csp.sentinel.concurrent.NamedThreadFactory;
 import com.alibaba.csp.sentinel.datasource.AbstractReadableDataSource;
-import com.alibaba.csp.sentinel.datasource.converter.SentinelConverter;
 import com.alibaba.csp.sentinel.datasource.DataSourceHolder;
+import com.alibaba.csp.sentinel.datasource.converter.SentinelConverter;
 import com.alibaba.csp.sentinel.log.RecordLog;
 import com.alibaba.nacos.api.config.ConfigService;
 import com.alibaba.nacos.api.config.listener.Listener;
-import org.apache.commons.lang3.ObjectUtils;
 
 import java.util.Properties;
 import java.util.concurrent.*;
@@ -86,7 +85,7 @@ public class NacosReadableDataSource<T> extends AbstractReadableDataSource<Strin
     }
 
     private void  initConfigService() {
-        this.configService = ObjectUtils.defaultIfNull((ConfigService) dataSourceHolder.getDataSourceClient(), null);
+        this.configService = dataSourceHolder.getDataSourceClient() == null ? null : (ConfigService) dataSourceHolder.getDataSourceClient();
     }
 
     private void loadInitialConfig() {

@@ -19,7 +19,6 @@ import com.alibaba.csp.sentinel.datasource.AbstractWritableDataSource;
 import com.alibaba.csp.sentinel.datasource.DataSourceHolder;
 import com.alibaba.csp.sentinel.datasource.converter.SentinelConverter;
 import com.alibaba.nacos.api.config.ConfigService;
-import org.apache.commons.lang3.ObjectUtils;
 
 import java.util.Properties;
 
@@ -50,7 +49,7 @@ public class NacosWritableDataSource<T> extends AbstractWritableDataSource<T> {
     }
 
     private void init() {
-        this.configService = ObjectUtils.defaultIfNull((ConfigService)dataSourceHolder.getDataSourceClient(), null);
+        this.configService = dataSourceHolder.getDataSourceClient() == null ? null : (ConfigService) dataSourceHolder.getDataSourceClient();
     }
 
     @Override
