@@ -65,7 +65,7 @@ public class EtcdDataSourceTest {
         Assert.assertNotNull(dataSource.getReader().readSource().equals("test"));
 
         kvClient.put(ByteSequence.from("foo".getBytes()), ByteSequence.from("test2".getBytes()));
-        Assert.assertNotNull(dataSource.getProperty().equals("test2"));
+        Assert.assertNotNull(dataSource.getReader().getProperty().equals("test2"));
     }
 
     @Test

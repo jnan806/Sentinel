@@ -44,8 +44,8 @@ public class EtcdDataSourceDemo {
         SentinelConfig.setConfig(EtcdConfig.CHARSET, "utf-8");
         SentinelConfig.setConfig(EtcdConfig.AUTH_ENABLE, "true");
 
-        ReadableDataSource<String, List<FlowRule>> flowRuleEtcdDataSource = new EtcdDataSource(rule_key, new JsonArrayConverter(FlowRule.class)).getReader();
-        FlowRuleManager.register2Property(flowRuleEtcdDataSource.getProperty());
+        EtcdDataSource<List<FlowRule>> flowRuleEtcdDataSource = new EtcdDataSource(rule_key, new JsonArrayConverter(FlowRule.class));
+        FlowRuleManager.register2Property(flowRuleEtcdDataSource.getReader().getProperty());
         List<FlowRule> rules = FlowRuleManager.getRules();
         System.out.println(rules);
     }
