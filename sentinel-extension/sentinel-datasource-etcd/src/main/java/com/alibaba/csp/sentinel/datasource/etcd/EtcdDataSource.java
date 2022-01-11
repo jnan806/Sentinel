@@ -15,110 +15,89 @@
  */
 package com.alibaba.csp.sentinel.datasource.etcd;
 
-import com.alibaba.csp.sentinel.datasource.AbstractDataSource;
-import com.alibaba.csp.sentinel.datasource.Converter;
-import com.alibaba.csp.sentinel.log.RecordLog;
-
+import com.alibaba.csp.sentinel.datasource.DataSourceHolder;
+import com.alibaba.csp.sentinel.datasource.DataSourceMode;
+import com.alibaba.csp.sentinel.datasource.converter.SentinelConverter;
 import io.etcd.jetcd.ByteSequence;
 import io.etcd.jetcd.Client;
-import io.etcd.jetcd.KeyValue;
-import io.etcd.jetcd.Watch;
-import io.etcd.jetcd.kv.GetResponse;
-import io.etcd.jetcd.watch.WatchEvent;
 
 import java.nio.charset.Charset;
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
- * A read-only {@code DataSource} with Etcd backend. When the data in Etcd backend has been modified,
- * Etcd will automatically push the new value so that the dynamic configuration can be real-time.
- *
- * @author lianglin
- * @since 1.7.0
+ * @author Jiajiangnan
  */
-public class EtcdDataSource<T> extends AbstractDataSource<String, T> {
+public class EtcdDataSource<T> extends DataSourceHolder {
 
-    private final Client client;
-    private Watch.Watcher watcher;
-
-    private final String key;
-    private Charset charset = Charset.forName(EtcdConfig.getCharset());
+    private EtcdReadableDataSource<T> readableDataSource;
+    private EtcdWritableDataSource<T> writableDataSource;
 
     /**
      * Create an etcd data-source. The connection configuration will be retrieved from {@link EtcdConfig}.
      *
      * @param key    config key
-     * @param parser data parser
+     * @param converter data converter
      */
-    public EtcdDataSource(String key, Converter<String, T> parser) {
-        super(parser);
+    public EtcdDataSource(String key, SentinelConverter<String, T> converter) {
+        this(key, converter, DataSourceMode.READABLE);
+    }
+
+    /**
+     * Create an etcd data-source. The connection configuration will be retrieved from {@link EtcdConfig}.
+     *
+     * @param key    config key
+     * @param converter data converter
+     * @param dataSourceMode data dataSourceMode
+     */
+    public EtcdDataSource(String key, SentinelConverter<String, T> converter, DataSourceMode dataSourceMode) {
+        super(converter, dataSourceMode);
+
+        Charset charset = Charset.forName(EtcdConfig.getCharset());
+
+        Client etcdClient = null;
         if (!EtcdConfig.isAuthEnable()) {
-            this.client = Client.builder()
+            etcdClient = Client.builder()
                 .endpoints(EtcdConfig.getEndPoints().split(",")).build();
         } else {
-            this.client = Client.builder()
+            etcdClient = Client.builder()
                 .endpoints(EtcdConfig.getEndPoints().split(","))
                 .user(ByteSequence.from(EtcdConfig.getUser(), charset))
                 .password(ByteSequence.from(EtcdConfig.getPassword(), charset))
                 .authority(EtcdConfig.getAuthority())
                 .build();
         }
-        this.key = key;
-        loadInitialConfig();
-        initWatcher();
+        super.setDataSourceClient(etcdClient);
+
+
+        if(DataSourceMode.ALL == dataSourceMode || DataSourceMode.READABLE == dataSourceMode) {
+            this.readableDataSource = new EtcdReadableDataSource(key, charset, this);
+        }
+
+        if(DataSourceMode.ALL == dataSourceMode || DataSourceMode.WRITABLE == dataSourceMode) {
+            this.writableDataSource = new EtcdWritableDataSource<>(key, charset, this);
+        }
+
     }
 
-    private void loadInitialConfig() {
-        try {
-            T newValue = loadConfig();
-            if (newValue == null) {
-                RecordLog.warn(
-                    "[EtcdDataSource] Initial configuration is null, you may have to check your data source");
-            }
-            getProperty().updateValue(newValue);
-        } catch (Exception ex) {
-            RecordLog.warn("[EtcdDataSource] Error when loading initial configuration", ex);
+    public EtcdReadableDataSource<T> getReader() {
+        return this.readableDataSource;
+    }
+
+    public EtcdWritableDataSource<T> getWriter() {
+        return this.writableDataSource;
+    }
+
+    public void close() throws Exception {
+        if(DataSourceMode.ALL == dataSourceMode || DataSourceMode.READABLE == dataSourceMode) {
+            this.readableDataSource.close();
+        }
+
+        if(DataSourceMode.ALL == dataSourceMode || DataSourceMode.WRITABLE == dataSourceMode) {
+            this.writableDataSource.close();
+        }
+
+        if (this.getDataSourceClient() != null) {
+            ((Client) this.getDataSourceClient()).close();
         }
     }
 
-    private void initWatcher() {
-        watcher = client.getWatchClient().watch(ByteSequence.from(key, charset), (watchResponse) -> {
-            for (WatchEvent watchEvent : watchResponse.getEvents()) {
-                WatchEvent.EventType eventType = watchEvent.getEventType();
-                if (eventType == WatchEvent.EventType.PUT) {
-                    try {
-                        T newValue = loadConfig();
-                        getProperty().updateValue(newValue);
-                    } catch (Exception e) {
-                        RecordLog.warn("[EtcdDataSource] Failed to update config", e);
-                    }
-                } else if (eventType == WatchEvent.EventType.DELETE) {
-                    RecordLog.info("[EtcdDataSource] Cleaning config for key <{}>", key);
-                    getProperty().updateValue(null);
-                }
-            }
-        });
-    }
-
-    @Override
-    public String readSource() throws Exception {
-        CompletableFuture<GetResponse> responseFuture = client.getKVClient().get(ByteSequence.from(key, charset));
-        List<KeyValue> kvs = responseFuture.get().getKvs();
-        return kvs.size() == 0 ? null : kvs.get(0).getValue().toString(charset);
-    }
-
-    @Override
-    public void close() {
-        if (watcher != null) {
-            try {
-                watcher.close();
-            } catch (Exception ex) {
-                RecordLog.info("[EtcdDataSource] Failed to close watcher", ex);
-            }
-        }
-        if (client != null) {
-            client.close();
-        }
-    }
 }

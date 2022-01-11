@@ -17,17 +17,15 @@ package com.alibaba.csp.sentinel.datasource.etcd;
 
 import com.alibaba.csp.sentinel.config.SentinelConfig;
 import com.alibaba.csp.sentinel.datasource.ReadableDataSource;
+import com.alibaba.csp.sentinel.datasource.converter.EmptyConverter;
+import com.alibaba.csp.sentinel.datasource.converter.JsonArrayConverter;
 import com.alibaba.csp.sentinel.slots.block.flow.FlowRule;
 import com.alibaba.csp.sentinel.slots.block.flow.FlowRuleManager;
 import com.alibaba.fastjson.JSON;
 import io.etcd.jetcd.ByteSequence;
 import io.etcd.jetcd.Client;
 import io.etcd.jetcd.KV;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Ignore;
-import org.junit.Test;
+import org.junit.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -58,13 +56,13 @@ public class EtcdDataSourceTest {
 
     @Test
     public void testReadSource() throws Exception {
-        EtcdDataSource dataSource = new EtcdDataSource("foo", value -> value);
+        EtcdDataSource dataSource = new EtcdDataSource("foo", new EmptyConverter<String>());
         KV kvClient = Client.builder()
                 .endpoints(endPoints)
                 .build().getKVClient();
 
         kvClient.put(ByteSequence.from("foo".getBytes()), ByteSequence.from("test".getBytes()));
-        Assert.assertNotNull(dataSource.readSource().equals("test"));
+        Assert.assertNotNull(dataSource.getReader().readSource().equals("test"));
 
         kvClient.put(ByteSequence.from("foo".getBytes()), ByteSequence.from("test2".getBytes()));
         Assert.assertNotNull(dataSource.getProperty().equals("test2"));
@@ -73,7 +71,7 @@ public class EtcdDataSourceTest {
     @Test
     public void testDynamicUpdate() throws InterruptedException {
         String demo_key = "etcd_demo_key";
-        ReadableDataSource<String, List<FlowRule>> flowRuleEtcdDataSource = new EtcdDataSource<>(demo_key, (value) -> JSON.parseArray(value, FlowRule.class));
+        ReadableDataSource<String, List<FlowRule>> flowRuleEtcdDataSource = new EtcdDataSource<>(demo_key, new JsonArrayConverter(FlowRule.class)).getReader();
         FlowRuleManager.register2Property(flowRuleEtcdDataSource.getProperty());
 
         KV kvClient = Client.builder()
